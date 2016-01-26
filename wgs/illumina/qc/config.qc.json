@@ -1,6 +1,6 @@
 {
-  "sample_bam": "sscwgs/Sample_SSC12955/analysis/SSC12955.final.bam",
-  "sample_bai": "sscwgs/Sample_SSC12955/analysis/SSC12955.final.bai", 
+  "sample_bam": "Sample_SSC12955/analysis/SSC12955.final.bam",
+  "sample_bai": "Sample_SSC12955/analysis/SSC12955.final.bai", 
   "sample_name": "SSC12955",
   "final_output": "simonsphase3/testing/results/",
   "masked_ref": "simonsphase3/testing/hg19_masked",

@@ -1,0 +1,13 @@
+import os
+import pysam
+import pull_files as p
+
+SAMPLE_PATH = config["sample_bam"]
+SAMPLE_BAI = config["sample_bai"]
+
+rule get_files_from_requester_pay_bucket:
+    input: p.copy_from_requester_pay_bucket(SAMPLE_PATH) , p.copy_from_requester_pay_bucket(SAMPLE_BAI)
+    output: touch(SAMPLE_PATH) , touch(SAMPLE_BAI)
+    run :
+        pass
+#    shell: """python pull_files.py --sample_file {input[0]} ; python pull_files.py --sample_file {input[1]}"""
