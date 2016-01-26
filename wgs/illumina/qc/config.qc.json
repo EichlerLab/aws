@@ -1,0 +1,14 @@
+{
+  "sample_bam": "simonsphase3/testing/SSC00090.final.bam",
+  "sample_bai": "simonsphase3/test_bam/SSC00090.final.bam.bai", 
+  "sample_name": "SSC00090",
+  "final_output": "simonsphase3/testing/results/",
+  "masked_ref": "simonsphase3/testing/hg19_masked",
+  "contigs": "simonsphase3/testing/hg19_masked.contigs.txt",
+  "window_size": 5000000,
+  "temp_dir": "/scratch",
+  "ref_genome": "simonsphase3/testing/human_g1k_v37.fasta",
+  "picard": "/home/ec2-user/eichlerBinaries/picard.jar",
+  "wgs_output": "simonsphase3/testing/wgs_metrics/SSC00090_wgs_metrics.txt",
+  "targets": "simonsphase3/testing/nimblegen_solution_V2refseq2010.HG19.intervals"
+}
