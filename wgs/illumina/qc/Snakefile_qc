@@ -35,9 +35,9 @@ rule all:
     params: sge_opts="-l mfree=20G -N run_all" 
 
 rule copy_final:
-    input: expand("{sample}.MT.clean.bam", sample = SAMPLE_NAME), expand("{sample}.flagstat.txt", sample = SAMPLE_NAME), expand("{sample}_wgs_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_hybridization_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_per_target_coverage.txt", sample = SAMPLE_NAME), expand("{sample}.convert.to.bam.log", sample=SAMPLE_NAME), expand("{sample}.flagstat.log", sample=SAMPLE_NAME), expand("{sample}.extract.mito.log", sample=SAMPLE_NAME), expand("{sample}.hybridization.metrics.log", sample=SAMPLE_NAME), expand("{sample}.filter.mismatches.log", sample=SAMPLE_NAME), expand("{sample}.wgs.metrics.log", sample=SAMPLE_NAME)
+    input: expand("{sample}.MT.clean.bam", sample = SAMPLE_NAME), expand("{sample}.flagstat.txt", sample = SAMPLE_NAME), expand("{sample}_wgs_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_hybridization_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_per_target_coverage.txt", sample = SAMPLE_NAME)
     output: "{sample}.copy.finished.txt"
-    params: sge_opts = "-l mfree=8G"
+    params: prefix="{sample}", sge_opts = "-l mfree=8G"
     shell:
         """
         aws s3 cp {input[0]} s3://{FINAL_OUTPUT}
@@ -45,12 +45,12 @@ rule copy_final:
         aws s3 cp {input[2]} s3://{FINAL_OUTPUT}
         aws s3 cp {input[3]} s3://{FINAL_OUTPUT}
         aws s3 cp {input[4]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[5]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[6]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[7]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[8]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[9]} s3://{FINAL_OUTPUT}
-        aws s3 cp {input[10]} s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.convert.to.bam.log s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.flagstat.log s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.extract.mito.log s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.hybridization.metrics.log s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.filter.mismatches.log s3://{FINAL_OUTPUT}
+        aws s3 cp {params.prefix}.wgs.metrics.log s3://{FINAL_OUTPUT}
 
         touch {output}
         """
