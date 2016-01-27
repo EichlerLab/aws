@@ -1,7 +1,7 @@
 {
-  "sample_bam": "Sample_SSC12955/analysis/SSC12955.final.bam",
-  "sample_bai": "Sample_SSC12955/analysis/SSC12955.final.bai", 
-  "sample_name": "SSC12955",
+  "sample_bam": "simonsphase3/testing/13833.p1.final.sort.bam",
+  "sample_bai": "simonsphase3/testing/13833.p1.final.sort.bai", 
+  "sample_name": "13833.p1",
   "final_output": "simonsphase3/testing/results/",
   "masked_ref": "simonsphase3/testing/hg19_masked",
   "contigs": "simonsphase3/testing/hg19_masked.contigs.txt",
@@ -9,6 +9,6 @@
   "temp_dir": "/scratch",
   "ref_genome": "simonsphase3/testing/human_g1k_v37.fasta",
   "picard": "/home/ec2-user/eichlerBinaries/picard.jar",
-  "wgs_output": "simonsphase3/testing/wgs_metrics/SSC12955_wgs_metrics.txt",
+  "wgs_output": "simonsphase3/testing/wgs_metrics/13833.p1_wgs_metrics.txt",
   "targets": "simonsphase3/testing/nimblegen_solution_V2refseq2010.HG19.intervals"
 }

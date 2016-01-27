@@ -1,8 +1,9 @@
 import os
 import pysam
-import pull_files as p
-import boto3 as boto3
-#from snakemake.remote.S3 import RemoteProvider as S3RemoteProvider
+#import pull_files as p
+#import boto3 as boto3
+from snakemake.remote.S3 import RemoteProvider as S3RemoteProvider
+
 AWS_ACCESS_KEY_ID = os.environ["aws_access_key_id"]
 AWS_SECRET_ACCESS_KEY_ID = os.environ["aws_secret_access_key"]
 
@@ -30,11 +31,12 @@ TARGETS = config["targets"]
 localrules: all, copy_final, flagstat, hybridization_metrics, wgs_metrics, convert_to_bam, filter_on_greater_than_10_percent_mismatch, extract_mitochondria
 
 rule all:
-    input: SAMPLE_PATH, expand("{sample}.flagstat.txt", sample = SAMPLES), expand("{sample}.MT.sam", sample = SAMPLES), expand("{sample}.MT.clean.sam", sample = SAMPLES), expand("{sample}.MT.clean.bam", sample = SAMPLES), expand("{sample}_wgs_metrics.txt", sample = SAMPLES), expand("{sample}_hybridization_metrics.txt", sample = SAMPLES), expand("{sample}_per_target_coverage.txt", sample = SAMPLES)
+    input: SAMPLE_PATH, expand("{sample}.flagstat.txt", sample = SAMPLES), expand("{sample}.MT.sam", sample = SAMPLES), expand("{sample}.MT.clean.sam", sample = SAMPLES), expand("{sample}.MT.clean.bam", sample = SAMPLES), expand("{sample}_wgs_metrics.txt", sample = SAMPLES), expand("{sample}_hybridization_metrics.txt", sample = SAMPLES), expand("{sample}_per_target_coverage.txt", sample = SAMPLES), expand("{sample}.copy.finished.txt", sample=SAMPLES)
     params: sge_opts="-l mfree=20G -N run_all" 
 
 rule copy_final:
-    input: expand("{sample}.MT.clean.bam", sample = SAMPLE_NAME), expand("{sample}.flagstat.txt", sample = SAMPLE_NAME), expand("{sample}_wgs_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_hybridization_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_per_target_coverage.txt", sample = SAMPLE_NAME)
+    input: expand("{sample}.MT.clean.bam", sample = SAMPLE_NAME), expand("{sample}.flagstat.txt", sample = SAMPLE_NAME), expand("{sample}_wgs_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_hybridization_metrics.txt", sample = SAMPLE_NAME), expand("{sample}_per_target_coverage.txt", sample = SAMPLE_NAME), expand("{sample}.convert.to.bam.log", sample=SAMPLE_NAME), expand("{sample}.flagstat.log", sample=SAMPLE_NAME), expand("{sample}.extract.mito.log", sample=SAMPLE_NAME), expand("{sample}.hybridization.metrics.log", sample=SAMPLE_NAME), expand("{sample}.filter.mismatches.log", sample=SAMPLE_NAME), expand("{sample}.wgs.metrics.log", sample=SAMPLE_NAME)
+    output: "{sample}.copy.finished.txt"
     params: sge_opts = "-l mfree=8G"
     shell:
         """
@@ -43,7 +45,14 @@ rule copy_final:
         aws s3 cp {input[2]} s3://{FINAL_OUTPUT}
         aws s3 cp {input[3]} s3://{FINAL_OUTPUT}
         aws s3 cp {input[4]} s3://{FINAL_OUTPUT}
-        aws s3 cp *log s3://{FINAL_OUTPUT}
+        aws s3 cp {input[5]} s3://{FINAL_OUTPUT}
+        aws s3 cp {input[6]} s3://{FINAL_OUTPUT}
+        aws s3 cp {input[7]} s3://{FINAL_OUTPUT}
+        aws s3 cp {input[8]} s3://{FINAL_OUTPUT}
+        aws s3 cp {input[9]} s3://{FINAL_OUTPUT}
+        aws s3 cp {input[10]} s3://{FINAL_OUTPUT}
+
+        touch {output}
         """
 
 rule flagstat:
@@ -116,7 +125,7 @@ rule filter_on_greater_than_10_percent_mismatch:
     """
 
 rule extract_mitochondria:
-    input: SAMPLE_PATH, SAMPLE_PATH + ".bai"
+    input: SAMPLE_PATH
     output: "{sample}.MT.sam"
     log: "{sample}.extract.mito.log"
     params: sge_opts="-l mfree=10G -N extract_mitochondria -cwd"
@@ -127,21 +136,22 @@ rule extract_mitochondria:
         #module load samtools/1.2
 
         samtools view -h {input[0]} MT > {output}
-        ls {input[1]}
 
         date >> {log}
 
     """
 
-#rule get_files_from_s3:
-#    input: S3.remote(SAMPLE_PATH, keep_local=True), S3.remote(REF_GENOME, keep_local=True), S3.remote(REF_GENOME + ".fai", keep_local=True), S3.remote(SAMPLE_BAI, keep_local=True), S3.remote(TARGETS, keep_local=True)
-#    output: touch(SAMPLE_PATH), touch(REF_GENOME), touch(REF_GENOME + ".fai"), touch(SAMPLE_BAI), touch(TARGETS)
-#    run:
-#        pass
-
-rule get_files_from_requester_pay_bucket:
-    input: p.copy_from_requester_pay_bucket(SAMPLE_PATH) , p.copy_from_requester_pay_bucket(SAMPLE_BAI)
-    output: touch(SAMPLE_PATH) , touch(SAMPLE_BAI)
-    run :
+rule get_files_from_s3:
+    input: S3.remote(SAMPLE_PATH, keep_local=True), S3.remote(REF_GENOME, keep_local=True), S3.remote(REF_GENOME + ".fai", keep_local=True), S3.remote(SAMPLE_BAI, keep_local=True), S3.remote(TARGETS, keep_local=True)
+    output: touch(SAMPLE_PATH), touch(REF_GENOME), touch(REF_GENOME + ".fai"), touch(SAMPLE_BAI), touch(TARGETS)
+    run:
         pass
+
+
+
+#rule get_files_from_requester_pay_bucket:
+#    input: p.copy_from_requester_pay_bucket(SAMPLE_PATH) , p.copy_from_requester_pay_bucket(SAMPLE_BAI)
+#    output: touch(SAMPLE_PATH) , touch(SAMPLE_BAI)
+#    run :
+#        pass
 #    shell: """python pull_files.py --sample_file {input[0]} ; python pull_files.py --sample_file {input[1]}"""
