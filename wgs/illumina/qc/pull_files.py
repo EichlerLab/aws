@@ -1,6 +1,6 @@
 #!/bin/python
 
-#import boto3
+import boto3
 import os
 import argparse
 
