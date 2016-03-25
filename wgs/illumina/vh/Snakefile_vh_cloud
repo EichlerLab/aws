@@ -1,0 +1,69 @@
+import os
+import sys
+import csv
+import glob
+
+configfile: "config_vh.json"
+
+REFERENCE_DIR=config["REFERENCE_DIR"]
+REFERENCE=config["REFERENCE"]
+GAPS=config["GAPS"]
+REPEATS=config["REPEATS"]
+DUPS=config["DUPS"]
+MOBILE_ELEMENTS=config["MOBILE_ELEMENTS"]
+GC_PROFILE=config["GC_PROFILE"]
+CHROM_FILE=config["CHROM_FILE"]
+chromosomes=[line.rstrip('\n').split("\t")[0].replace(" ","") for line in open(CHROM_FILE)]
+SCRIPT_DIR=config["SCRIPT_DIR"]
+VH_OUTDIR=config["VH_OUTDIR"]
+BAM_PATH=config["BAM_PATH"]
+families=list(set([s.split("/")[-1].split(".")[0] for s in glob.glob("%s/*.bam"%BAM_PATH)]))
+rels=["fa","mo","p1","s1"]
+OUT_S3_BUCKET=config["OUT_S3_BUCKET"]
+rule all :
+    input : expand("%s/ALL.SV.{chr}" % VH_OUTDIR,chr=chromosomes)
+    params: "-l mfree=20G -N "" -cwd"
+
+rule combine_sv:
+    input: expand("{family}_lib.{chr}",chr=chromosomes,family=families)
+    output: "%s/ALL.SV.{chr}" % VH_OUTDIR
+    params: sge_opts = "-l mfree=10G" , chr="{chr}"
+    run:
+        dirname=os.path.dirname(input[0])
+        files=[]
+        for f in glob.glob("Out_SV*"):
+            if (params.chr) +"_" in f:
+                name=os.path.basename(f)
+                files.append(name)
+        shell("cat {files} > {output}")
+        shell ("aws s3 cp {output} {OUT_S3_BUCKET}")
+
+rule run_newvh_bychr :
+    input : BAM_LIST="bam_lists/{family}.bam.list" , BAM_INDEX="bam_lists/{family}.index.list", chr_size="{chr}.size"
+    output :  "{family}_lib.{chr}"
+    params: sge_opts="-l mfree=6G -N run_new_vh_{family}_{chr} -cwd"
+    shell:"""
+            {SCRIPT_DIR}/tardis -b {input.BAM_LIST} --out {wildcards.family}.{wildcards.chr}.calls --ref {REFERENCE} --gaps {GAPS} --reps {REPEATS} --dups {DUPS}  --library {output} -m {MOBILE_ELEMENTS} -x {input.BAM_INDEX} -s {GC_PROFILE} --chr {input.chr_size}  --readName {wildcards.family}_rn_{wildcards.chr}
+    """
+
+rule create_chrom_region_file:
+    input : CHROM_FILE
+    output : "{chr}.size"
+    params : sge_opts="-l mfree=2G -N split_chr_{chr} -cwd"
+    shell:"""
+        grep -w {wildcards.chr} {input} >{output}
+    """
+rule split_bam_files:
+    input: expand("%s/{family}.{rel}.final.bam" % BAM_PATH,family=families,rel=rels)
+    output:"bam_lists/{family}.bam.list","bam_lists/{family}.index.list"
+    params : sge_opts="-l mfree=2G -N make_bam_lists -cwd",family="{family}"
+    run:
+        fout_bam=open(output[0],"w")
+        fout_bai=open(output[1],"w")
+        for file in input:
+            if (params.family) in file:
+                fout_bam.write(file+"\n")
+                bai=file.replace(".bam",".bai")
+                fout_bai.write(bai+"\n")
+        fout_bam.close()
+        fout_bai.close()

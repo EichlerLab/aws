@@ -1,0 +1,14 @@
+{
+    "REFERENCE_DIR":"/home/ec2-user/reference/vh_references",
+    "REFERENCE":"/home/ec2-user/reference/vh_references/hg19.ref",
+    "GAPS":"/home/ec2-user/reference/vh_references/hg19_Gap.Table.USCS.Clean",
+    "REPEATS":"/home/ec2-user/reference/vh_references/regions_to_exclude.bed",
+    "DUPS":"/home/ec2-user/reference/vh_references/Hg19.Satellite",
+    "MOBILE_ELEMENTS":"/home/ec2-user/reference/vh_references/Hg19.RepMask.Alu.L1.SVA.Sort.Used",
+    "GC_PROFILE":"/home/ec2-user/reference/vh_references/gc_profile.bed.Clean",
+    "CHROM_FILE":"/home/ec2-user/reference/vh_references/AllChro_Hg19_Size.BackUp",
+    "SCRIPT_DIR":"/home/ec2-user/eichlerBinaries",
+    "VH_OUTDIR":"vh_calls_combined_by_chr",
+    "BAM_PATH":"/mnt/family_bam",
+    "OUT_S3_BUCKET":"s3://simonsphase3/results/vh/round1/"
+}
