@@ -1,0 +1,147 @@
+#Archana Raja
+#Annotation pipeline for CNV calls
+#version: 10/15/2015
+
+import glob
+import gzip
+import io
+import random
+import math
+from datetime import date
+import time
+import os
+
+SCRIPT_DIR="/net/eichler/vol23/projects/simons_genome_project/nobackups/analysis/ssc/combining_cnvs/merge_greedy/scripts"
+chrom_info_file="/net/eichler/vol2/eee_shared/assemblies/hg19/chromInfo.txt"
+chrs= [line.rstrip('\n').split("\t")[0] for line in open(chrom_info_file) if not ((line.rstrip('\n').split("\t")[0]).endswith("random") or (line.rstrip('\n').split("\t")[0]).startswith("chrUn") or ("_" in line.rstrip('\n').split("\t")[0]) or ("chrM" in line.rstrip('\n').split("\t")[0]))]
+
+print (chrs)
+INIT_MODULES="module load bedtools/latest"
+rule all :
+	input : "dels/final_dels_bysample_withinh.txt","dels/cnv_size.bed","dels/percent_repeats.bed","dels/genes.bed","dels/stam_regulatory_regions.bed","dels/percent_segdup.bed","dels/calls.bed","dels/gerp_elements.bed","dels/exons.bed","dels/rvis.bed","dels/1KG_phase3_counts.bed","dels/unique_bases.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+rule get_unique_bases:
+	input: "dels/calls.bed",repeat_segdup_merged_file="/net/eichler/vol4/home/araja/Useful-Code/dCGH/wgac_rmsk_merged.txt"
+	output: "dels/unique_bases.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		intersectBed -a {input[0]} -b {input.repeat_segdup_merged_file} -wao|groupBy -g 1-3 -c 7 -o sum|awk 'OFS="\t"{{print $1,$2,$3,($3-$2)-($4)}}' >{output[0]}
+		sed -i '1i\contig\tstart\tstop\tunique_bases' {output[0]}
+	"""
+rule get_1KG_counts:
+        input : "dels/calls.bed",ref="/net/eichler/vol2/eee_shared/1000_genomes_local/1000_genomes/technical/working/20130723_phase3_wg/merged_sv_genotypes/ALL.wgs.mergedSV.v5.20130502.svs.events.bed"
+        output : "dels/1KG_phase3_counts.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+        shell :"""
+                grep -w "DEL\|CNV\|DEL_ALU\|DEL_HERV\|DEL_LINE1\|DEL_SVA" {input.ref}|intersectBed -a {input[0]} -b - -f 0.5 -r -c > {output[0]}
+                sed -i '1i\contig\tstart\tstop\t1KG_counts' {output[0]}
+        """
+rule get_rvis :
+        input : "dels/calls.bed", ref="/net/eichler/vol4/home/araja/Useful-Code/dCGH/rvis_scores.txt"
+        output: "dels/rvis.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+        shell: """
+                sed '1d' {input.ref} |intersectBed -a {input[0]} -b - -wao|groupBy -g 1,2,3 -c 8,9 -o distinct,distinct >{output[0]}
+                sed -i '1i\contig\tstart\tstop\tRVIS\tRVIS_percentile' {output[0]}
+        """
+rule get_exons :
+        input: "dels/calls.bed" , ref="/net/eichler/vol2/eee_shared/assemblies/hg19/genes/refGene.exons.bed"
+        output:"dels/exons.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+        shell : """
+                intersectBed -a {input[0]} -b {input.ref} -wao|groupBy -g 1,2,3 -c 7 -o distinct >{output[0]}
+                sed -i '1 i\contig\tstart\tstop\texons' {output[0]} 
+        """
+rule get_gerp_elements :
+        input : "dels/calls.bed" ,ref="/net/eichler/vol4/home/araja/Useful-Code/dCGH/all_gerp_elements.bed"
+        output :"dels/gerp_elements.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+        shell :"""
+                intersectBed -a {input[0]} -b {input.ref} -wo|sort -k1,1V -k2,2n|groupBy -g 1,2,3 -c 8 -o sum|awk 'OFS="\t"{{print $1,$2,$3,($4/($3-$2))}}' >{output[0]}
+                sed -i '1 i\contig\tstart\tstop\tgerp_elements' {output[0]}
+	"""
+rule get_cnv_size :
+	input : "dels/calls.bed"
+	output : "dels/cnv_size.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		awk 'OFS="\t"{{print $1,$2,$3,$3-$2}}' {input[0]} >{output[0]}
+		sed -i '1 i\contig\tstart\tstop\tcnv_size' {output[0]}
+	"""	
+
+
+rule get_precent_repeats :
+	input : "dels/calls.bed",ref="/net/eichler/vol4/home/araja/Useful-Code/dCGH/hg19_rmsk_merged.txt"
+	output :"dels/percent_repeats.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell :"""
+		intersectBed -a {input[0]} -b {input.ref} -wao | groupBy -g 1,2,3 -c 7 -o sum |awk 'OFS="\t"{{print $1,$2,$3,($4/($3-$2))}}' >{output[0]}
+		sed -i '1 i\contig\tstart\tstop\tpercent_repeat' {output[0]}
+	"""
+rule get_genes :
+	input : "dels/calls.bed",ref="/net/eichler/vol2/eee_shared/assemblies/hg19/genes/refGene.bed"		
+	output : "dels/genes.bed","dels/closest_genes.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		intersectBed -a {input[0]} -b {input.ref} -wao|groupBy -g 1,2,3 -c 7 -o distinct >{output[0]}
+		sed -i '1 i\contig\tstart\tstop\tgenes' {output[0]}
+		closestBed -io -a {input[0]} -b {input.ref} |groupBy -g 1,2,3 -c 7 -o distinct > {output[1]}
+		sed -i '1 i\contig\tstart\tstop\tclosest_genes' {output[1]}
+	"""
+rule get_stam_regulatory_regions:
+	input : "dels/calls.bed",ref="/net/eichler/vol4/home/araja/Useful-Code/dCGH/stam_lab_dnase1_cns.bed"	  
+	output : "dels/stam_regulatory_regions.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		intersectBed -a {input[0]} -b {input.ref} -wao|groupBy -g 1,2,3 -c 7 -o sum|awk 'OFS="\t"{{print $1,$2,$3,($4/($3-$2))}}' >{output[0]}
+		sed -i '1 i\contig\tstart\tstop\tstam_regulatory_regions' {output[0]}
+	"""
+rule get_percent_segdup :
+	input : "dels/calls.bed",ref="/net/eichler/vol2/eee_shared/assemblies/hg19/wgac/wgac.bed"
+	output : "dels/percent_segdup.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		intersectBed -a {input[0]} -b {input.ref} -wao |groupBy -g 1,2,3 -c 7 -o sum| awk 'OFS="\t"{{print $1,$2,$3,($4/($3-$2))}}' >{output[0]}
+		sed -i '1 i\contig\tstart\tstop\tpercent_segdup' {output[0]}
+		"""
+rule get_calls:
+	input : "dels/final_dels_bysample_withinh.txt"
+	output : "dels/calls.bed"
+	params: sge_opts="-l mfree=20G -cwd"
+	shell : """
+		sed '1d' {input[0]}|cut -f1-3|uniq > {output[0]}
+	"""
+
+rule merge_chr :
+	input : expand("dels/chrs_withinh/{chrom}_dels_withinh.txt",chrom=chrs)
+	output :"dels/final_dels_bysample_withinh.txt"
+	params: sge_opts="-l mfree=30G -N merge_chr -cwd"
+	shell : """
+		cat {input}|grep -v "contig"|sort -k1,1 -k2,2n >{output}
+		sed -i '1i\contig\tstart\tstop\tcn\tSSCID\tID\tfamilyID\trel\tcnvrID\tinh\tfrequency' {output}
+	"""
+#contig  start   stop    cn      SSCID   ID      familyID        rel     cnvrID  inh     frequency
+rule annotate_biallelic_dels :
+	input : "dels/chrs/{chrom}_dels_withids.txt"
+	output : "dels/chrs_withinh/{chrom}_dels_withinh.txt"
+	params: sge_opts="-l mfree=20G -N annotate_dels -cwd"
+	shell : """python /net/eichler/vol4/home/araja/tychele/annotation/script/annotate_inheritence_dels.py {input[0]} {output[0]}"""
+
+
+rule get_sample_ids:
+	input :manifest="dels/chrs/vh_{chrom}.calls" , extra="/net/eichler/vol21/projects/simons_genome_project/nobackups/genome_strip/genome_strip_curation/sample_manifest.txt"
+        output:"dels/chrs/{chrom}_dels_withids.txt"
+	params: sge_opts="-l mfree=10G -N get_sample_ids -cwd"
+	shell :"""
+		python ~/Useful-Code/gene_duplication_analysis/merge_files.py --manifest_file {input.manifest} --extra_file {input.extra} --merge_attr "SSCID" -o {output}
+	"""
+
+rule get_vh_dels:
+	input: "combined/ALL.SV.{chrom}"
+	output: "dels/chrs/vh_{chrom}.calls"
+	params: sge_opts="-l mfree=10G -N get_dels -cwd"
+	shell: """
+		python ~/Useful-Code/Variation_Hunter/cloud/vh_calls_to_tab.py {input} {output}
+	"""
+
+#for i in `cat list.txt `;do cat cloud/round*/$i >>merged/$i;done
