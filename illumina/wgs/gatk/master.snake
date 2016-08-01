@@ -1,0 +1,39 @@
+import os
+import glob
+import sys
+
+configfile: "config_gatk.json"
+
+BAM_PATH=config["BAM_PATH"]
+#FAMILY_LISTS = os.listdir("bam_lists")
+#FAMILIES = [fam.replace(".bam.list", "") for fam in FAMILY_LISTS if fam.endswith(".bam.list")]
+
+FAMILIES=list(set([s.split("/")[-1].split(".")[0] for s in glob.glob("%s/*.bam"%BAM_PATH)]))
+rels=["fa","mo","p1","s1"]
+
+#FAMILIES.remove('14366')
+
+rule all:
+	#input: expand("{family}.vcf", family = FAMILIES)
+        input : expand("merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz.tbi",family=FAMILIES)
+
+rule run_family:
+	input: "bam_lists/{family}.bam.list"
+	output: "merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz.tbi"
+	shell:
+		"snakemake -s gatk_family_glob.snake -j 38 --config family={wildcards.family} -w 30"
+
+rule split_bam_files:
+    input: expand("%s/{{family}}.{rel}.final.bam" % BAM_PATH,rel=rels)
+    output:"bam_lists/{family}.bam.list","bam_lists/{family}.index.list"
+    params : sge_opts="-l mfree=2G -N make_bam_lists -cwd",family="{family}"
+    run:
+        fout_bam=open(output[0],"w")
+        fout_bai=open(output[1],"w")
+        for file in input:
+            if (params.family) in file:
+                fout_bam.write(file+"\n")
+                bai=file.replace(".bam",".bai")
+                fout_bai.write(bai+"\n")
+        fout_bam.close()
+        fout_bai.close()

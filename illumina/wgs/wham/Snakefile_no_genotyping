@@ -1,0 +1,57 @@
+#Tychele Turner
+#WHAM pipeline
+##03222016
+
+import os
+
+if config == {}:
+    configfile: "config.json"
+
+REFERENCE = config["reference"]
+DATA_DIR = config["data_dir"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+    if file.endswith(".final.bam"):
+        SAMPLES.append(str(file).split('.final.bam')[0].split('.')[0])
+
+SAMPLES2 = list(set(SAMPLES))
+SAMPLES = SAMPLES2
+
+print(SAMPLES)
+
+rule all:
+    input: expand("%s/{sample}.fa.final.bam" % DATA_DIR, sample = SAMPLES), expand("{sample}.wham.vcf", sample = SAMPLES), expand("{sample}.transfer.txt", sample = SAMPLES)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule copy:
+    input: "{sample}.wham.vcf"
+    output: "{sample}.transfer.txt"
+    shell: """
+        aws s3 cp {input} s3://simonsphase3/results/wham/round2/
+        touch {output}
+    """
+
+rule wham_family:
+    input: "%s/{sample}.fa.final.bam"%DATA_DIR
+    output: "{sample}.wham.vcf"
+    log: "{sample}.wham.family.log"
+    params: prefix="{sample}", sge_opts="-l h_vmem=6G,disk_free=20G -q all.q -N whamfam -pe serial 38 -cwd "
+    shell: """
+    START=$(date +%s)
+
+    WHAM-GRAPHENING -e MT -k -x 8 -m 30 -a {REFERENCE} -f {input},{DATA_DIR}{params.prefix}.mo.final.bam,{DATA_DIR}{params.prefix}.p1.final.bam,{DATA_DIR}{params.prefix}.s1.final.bam 2> {params.prefix}.wham.fam.err > {params.prefix}.wham.vcf
+
+    ls {output}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule clean:
+    """clean up temporary files"""
+    shell: """
+    """
+
+

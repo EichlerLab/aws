@@ -1,0 +1,7 @@
+{
+  "reference": "/home/ec2-user/reference/human_g1k_v37.fasta",
+  "data_dir": "/mnt/family_bam",
+  "picard": "/home/ec2-user/eichlerBinaries/picard.jar",
+  "targets": "/home/ec2-user/reference/nimblegen_solution_V2refseq2010.HG19.intervals",
+  "awsoutname": "final/"
+}

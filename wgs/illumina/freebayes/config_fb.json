@@ -1,7 +1,0 @@
-{
-    "REFERENCE":"/home/ec2-user/reference/human_g1k_v37.fasta",
-    "PERL_LIB":"/mnt/freebayes_multi/vcftools_0.1.13/perl",
-    "BAM_PATH":"/mnt/family_bam",
-    "REGION_FILE":"human_g1k_v37.100kbp.regions",
-    "OUT_S3_BUCKET":"s3://simonsphase3/results/freebayes/round1/"
-}

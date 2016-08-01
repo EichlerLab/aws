@@ -1,0 +1,59 @@
+import os
+import sys
+import csv
+import glob
+
+configfile: "config_gatk.json"
+
+REFERENCE=config["REFERENCE"]
+PERL_LIB=config["PERL_LIB"]
+BAM_PATH=config["BAM_PATH"]
+DBSNP=config["DBSNP"]
+GATK=config["GATK"]
+
+FAMILY = config["family"]
+#FAMILY_FILE = "bam_lists/%s.bam.list" % FAMILY
+#families=list(set([s.split("/")[-1].split(".")[0] for s in glob.glob("%s/*.bam"%BAM_PATH)]))
+#families = []
+#with open(FAMILY_FILE, "r") as reader:
+#	for line in reader:
+#		families.append(line.rstrip())
+rels=["fa","mo","p1","s1"]
+region_file=config["REGION_FILE"]
+regions= [line.rstrip('\n') for line in open(region_file)]
+OUT_S3_BUCKET=config["OUT_S3_BUCKET"]
+
+
+rule all:
+    input: expand("merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz.tbi",family=FAMILY)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule index_VCF:
+    input: "merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz"
+    output: "merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz.tbi"
+    params: sge_opts="-l mfree=40G -N index_vcf"
+    shell: "tabix -p vcf {input} ; aws s3 cp {output} {OUT_S3_BUCKET}"
+
+rule sort_VCF:
+    input : "merged_calls/{family}/{family}_gatk_merged.vcf.gz"
+    output: "merged_calls/{family}/{family}_gatk_merged_sorted.vcf.gz"
+    params: sge_opts="-l mfree=8G -N merge_vcf -pe serial 10 -l ssd=TRUE"
+    shell:"""zcat {input}|vcf-sort -c -p 10|bgzip > {output}; aws s3 cp {output} {OUT_S3_BUCKET} """
+
+
+rule gatk_merge :
+    input : expand("calls/{{family}}/{region}.vcf", region=regions)
+    output : merged_vcf="merged_calls/{family}/{family}_gatk_merged.vcf.gz",list="merged_calls/{family}/{family}.list"
+    params: sge_opts="-l mfree=40G -N cat_vcf" , family="{family}"
+    shell : """ find `dirname {input[0]}` -name "*.vcf" >>{output.list} ; export PERL5LIB={PERL_LIB};\
+            vcf-concat -f {output.list} |bgzip >{output.merged_vcf} """
+
+rule gatk:
+    input: BAM_LIST="bam_lists/{family}.bam.list"
+    output: "calls/{family}/{region}.vcf"
+    params: sge_opts="-l mfree=100G -N run_gatk -cwd"
+    shell: """
+        java -Xmx4g -jar {GATK} -T HaplotypeCaller -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample -A StrandBiasBySample -A Coverage -A FisherStrand -A HaplotypeScore -A MappingQualityRankSumTest -A MappingQualityZero -A QualByDepth -A RMSMappingQuality -A ReadPosRankSumTest -A VariantType -R {REFERENCE} --dbsnp {DBSNP} -stand_call_conf 30 -stand_emit_conf 10 -o {output} -nct 1 -I {input.BAM_LIST} -L {wildcards.region}
+
+    """
+

@@ -1,0 +1,50 @@
+import sys
+import csv
+import glob
+
+configfile: "config_whamg.json"
+
+B37REF=config["B37REF"]
+BAM_PATH=config["BAM_PATH"]
+EXCLUDE=config["EXCLUDE"]
+WHAM=config["WHAM"]
+families=list(set([s.split("/")[-1].split(".")[0] for s in glob.glob("%s/*.bam"%BAM_PATH)]))
+rels=["fa","mo","p1","s1"]
+
+rule all :
+    input : expand("{family}.whamg.vcf", family=families)
+    params: "-l mfree=20G -N "" -cwd"
+
+rule whamg_family:
+    input: BAM_LIST=expand("bam_lists/{family}.bam.list", family=families)
+    output: "{family}.whamg.vcf"
+    log: "{family}.whamg.log"
+    params: sge_opts="-l h_vmem=6G,disk_free=20G,h_rt=48:00:00 -N whamgfam -pe serial 16 -cwd "
+    shell: """
+        START=$(date +%s)
+        {WHAM} -f {input.BAM_LIST} -a {B37REF} -e {EXCLUDE} -u 20 -m 30 -x 8 > {output} 2> {wildcards.family}.whamg.err
+        aws s3 cp {wildcards.family}.whamg.vcf s3://simonsphase3/results/whamg/ 
+        aws s3 cp {wildcards.family}.whamg.err s3://simonsphase3/results/whamg/
+        END=$(date +%s)
+        DIFF=$(( $END - $START ))
+        echo "$DIFF" &> {log}        
+    """
+
+rule split_bam_files:
+    input: expand("%s/{family}.{rel}.final.bam" % BAM_PATH,family=families,rel=rels)
+    output:"bam_lists/{family}.bam.list","bam_lists/{family}.index.list"
+    params : sge_opts="-l mfree=2G,h_rt=48:00:00 -N make_bam_lists -cwd",family="{family}"
+    run:
+        fout_bam=open(output[0],"w")
+        fout_bai=open(output[1],"w")
+        for file in input:
+            if (params.family) in file:
+                fout_bam.write(file+"\n")
+                bai=file.replace(".bam",".bai")
+                fout_bai.write(bai+"\n")
+        fout_bam.close()
+        fout_bai.close()
+
+
+
+

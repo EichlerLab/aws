@@ -1,0 +1,157 @@
+import os
+
+if config == {}:
+    configfile: "config.json"
+
+REFERENCE = config["reference"]
+
+DATA_DIR = config["data_dir"]
+PICARD = config["picard"]
+TARGETS = config["targets"]
+AWSOUTNAME = config["awsoutname"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+    if file.endswith("final.bam"):
+        SAMPLES.append(str(file).split('.final.bam')[0])
+
+#SAMPLES=['SSC00089', 'SSC00090', 'SSC00091', 'SSC00092']
+
+print(SAMPLES)
+
+rule all:
+    input: expand("%s/{sample}.final.bam" % DATA_DIR, sample = SAMPLES), expand("{sample}.flagstat.txt", sample = SAMPLES), expand("{sample}.MT.sam", sample = SAMPLES), expand("{sample}.MT.clean.sam", sample = SAMPLES), expand("{sample}.MT.clean.bam", sample = SAMPLES), expand("{sample}_wgs_metrics.txt", sample = SAMPLES), expand("{sample}.insert.size.txt", sample=SAMPLES), expand("{sample}_hybridization_metrics.txt", sample = SAMPLES), expand("{sample}_per_target_coverage.txt", sample = SAMPLES), expand("{sample}.MT.clean.bam.bai", sample = SAMPLES)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule index_bam:
+    input: "{sample}.MT.clean.bam"
+    output: "{sample}.MT.clean.bam.bai"
+    log: "{sample}.index.bam.log"
+    params: sge_opts="-l mfree=10G -N index_bam -cwd"
+    shell: """
+    START=$(date +%s)
+
+    samtools index {input}
+
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule flagstat:
+    input: "%s/{sample}.final.bam"%DATA_DIR
+    output: "{sample}.flagstat.txt"
+    log: "{sample}.flagstat.log"
+    params: sge_opts="-l mfree=20G -N run_flagstat -cwd"
+    shell: """
+    START=$(date +%s)
+    samtools flagstat {input} > {output}
+
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule convert_to_bam:
+    input: "{sample}.MT.clean.sam"
+    output: "{sample}.MT.clean.bam"
+    log: "{sample}.convert.to.bam.log"
+    params: sge_opts="-l mfree=20G -N convert_to_bam -cwd"
+    shell: """
+    START=$(date +%s)
+    samtools view -Sb {input} > {output}
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule filter_on_greater_than_10_percent_mismatch:
+    input: "{sample}.MT.sam"
+    output: "{sample}.MT.clean.sam"
+    log: "{sample}.filter.mito.log"
+    params: sge_opts="-l mfree=20G -N filter_on_greater_than_10_percent_mismatch -cwd"
+    shell: """
+    START=$(date +%s)
+    egrep -w 'NM:i:1||NM:i:2||NM:i:3||NM:i:4||NM:i:5||NM:i:6||NM:i:7||NM:i:8||NM:i:9||NM:i:10||NM:i:11||NM:i:12||NM:i:13||NM:i:14||' {input} | grep -v 'NNNNNNNNNN' > {output}
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule wham_insert:
+    input: "%s/{sample}.final.bam"%DATA_DIR
+    output: "{sample}.insert.size.txt"
+    log: "{sample}.insert.size.log"
+    params: sge_opts="-l mfree=40G -N wham_insert -cwd"
+    shell: """
+    START=$(date +%s)
+    WHAM-GRAPHENING -f {input} -a {REFERENCE} -s -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,X,Y > {output}
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+    """
+
+
+rule extract_mitochondria:
+    input: "%s/{sample}.final.bam"%DATA_DIR
+    output: "{sample}.MT.sam"
+    log: "{sample}.extract.mito.log"
+    params: sge_opts="-l mfree=40G -N extract_mitochondria -cwd"
+    shell: """
+    START=$(date +%s)
+
+    samtools view -h {input} MT > {output}
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+rule wgs_metrics:
+    input: "%s/{sample}.final.bam"%DATA_DIR
+    output: "{sample}_wgs_metrics.txt"
+    log: "{sample}.wgs.metrics.log"
+    params: sge_opts="-l h_vmem=6G -N run_wgs_metrics -cwd"
+    shell: """
+    START=$(date +%s)
+    java -Xmx4g -XX:ParallelGCThreads=1 -jar {PICARD} CollectWgsMetrics REFERENCE_SEQUENCE={REFERENCE} INPUT={input} OUTPUT={output} VALIDATION_STRINGENCY=LENIENT
+    aws s3 cp {output} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+rule hybridization_metrics:
+    input: "%s/{sample}.final.bam"%DATA_DIR
+    output: "{sample}_hybridization_metrics.txt", "{sample}_per_target_coverage.txt"
+    log: "{sample}.hybridization.metrics.log"
+    params: sge_opts="-l h_vmem=6G -N run_hyb_metrics -cwd"
+    shell: """
+    START=$(date +%s)
+    java -Xmx4g -XX:ParallelGCThreads=1 -jar {PICARD} CalculateHsMetrics REFERENCE_SEQUENCE={REFERENCE} INPUT={input} OUTPUT={output[0]} PER_TARGET_COVERAGE={output[1]} BAIT_INTERVALS={TARGETS} TARGET_INTERVALS={TARGETS} VALIDATION_STRINGENCY=LENIENT
+    aws s3 cp {output[0]} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    aws s3 cp {output[1]} s3://simonsphase3/results/qc/{AWSOUTNAME}
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+rule clean:
+    shell: """
+    rm *summary
+    rm *sam
+
+    """
+

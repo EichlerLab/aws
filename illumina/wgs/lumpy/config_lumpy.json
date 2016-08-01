@@ -1,0 +1,4 @@
+{
+  "BAM_PATH":"/home/ec2-user/family_bam/",
+  "EXCLUDE": "./exclude_b37.bed",
+}

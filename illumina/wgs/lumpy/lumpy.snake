@@ -1,0 +1,53 @@
+import sys
+import csv
+import glob
+
+configfile: "config_lumpy.json"
+
+BAM_PATH=config["BAM_PATH"]
+EXCLUDE=config["EXCLUDE"]
+families=list(set([s.split("/")[-1].split(".")[0] for s in glob.glob("%s/*.bam"%BAM_PATH)]))
+rels=["fa","mo","p1","s1"]
+
+rule all :
+    input : expand("{family}.{rel}.splitters.sort.bam.bai", family=families, rel=rels), expand("{family}.{rel}.discordants.sort.bam.bai", family=families, rel=rels), expand("{family}.lumpyexpress.vcf", family=families)
+    params: "-l mfree=20G -N "" -cwd"
+
+rule lumpyExpress:
+    input: "%s/{family}.fa.final.bam"%BAM_PATH, "{family}.fa.splitters.sort.bam.bai", "{family}.fa.discordants.sort.bam.bai","{family}.mo.splitters.sort.bam.bai", "{family}.mo.discordants.sort.bam.bai", "{family}.p1.splitters.sort.bam.bai", "{family}.p1.discordants.sort.bam.bai", "{family}.s1.splitters.sort.bam.bai", "{family}.s1.discordants.sort.bam.bai"
+    output: "{family}.lumpyexpress.vcf"
+    log: "{family}.lumpyexpress.family.log"
+    params: sge_opts="-l h_vmem=16G,disk_free=20G,h_rt=48:00:00 -N lumpy -cwd "
+    shell: """
+        START=$(date +%s)
+        ls {input[0]} && {input[1]} && ls {input[2]} && ls {input[3]} && ls {input[4]} && ls {input[5]} && ls {input[6]} && ls {input[7]} && ls {input[8]}
+
+        lumpyexpress -B {BAM_PATH}{wildcards.family}.fa.final.bam,{BAM_PATH}{wildcards.family}.mo.final.bam,{BAM_PATH}{wildcards.family}.p1.final.bam,{BAM_PATH}{wildcards.family}.s1.final.bam -S {wildcards.family}.fa.splitters.sort.bam,{wildcards.family}.mo.splitters.sort.bam,{wildcards.family}.p1.splitters.sort.bam,{wildcards.family}.s1.splitters.sort.bam -D {wildcards.family}.fa.discordants.sort.bam,{wildcards.family}.mo.discordants.sort.bam,{wildcards.family}.p1.discordants.sort.bam,{wildcards.family}.s1.discordants.sort.bam -o {output} -x {EXCLUDE}
+
+        aws s3 cp {wildcards.family}.lumpyexpress.vcf s3://simonsphase3/results/lumpy/
+
+        END=$(date +%s)
+        DIFF=$(( $END - $START ))
+        echo "$DIFF" &> {log}
+
+    """
+
+rule filterBam:
+    input: expand("%s/{family}.{rel}.final.bam" % BAM_PATH, family=families, rel=rels)
+    output: "{family}.{rel}.splitters.sort.bam.bai", "{family}.{rel}.discordants.sort.bam.bai"
+    params: "{family}.{rel}", sge_opts="-l h_vmem=6G,disk_free=20G,h_rt=48:00:00 -N filterBam -cwd "
+    log: "{family}.{rel}.filterBam.log"
+    shell: """
+        START=$(date +%s)
+        ls {input}
+        filter {BAM_PATH}{wildcards.family}.{wildcards.rel}.final.bam {wildcards.family}.{wildcards.rel}.splitters.bam {wildcards.family}.{wildcards.rel}.discordants.bam
+        samtools sort {wildcards.family}.{wildcards.rel}.discordants.bam -o {wildcards.family}.{wildcards.rel}.discordants.sort.bam && samtools sort {wildcards.family}.{wildcards.rel}.splitters.bam -o {wildcards.family}.{wildcards.rel}.splitters.sort.bam
+        samtools index {wildcards.family}.{wildcards.rel}.discordants.sort.bam && samtools index {wildcards.family}.{wildcards.rel}.splitters.sort.bam 
+        ls {output[0]} && ls {output[1]}
+        END=$(date +%s)
+        DIFF=$(( $END - $START ))
+        echo "$DIFF" &> {log}
+    """
+
+
+
