@@ -11,5 +11,7 @@ This is the github repository for the Eichler lab Amazon Web Services (AWS) pipe
 | QC | 	Sample	| m4.2xlarge	| 0.479	| 1 x 1000 GB	| 0.13	| 8	| 32	| 4	| 7	| 56	| 14	| 1.07| 
 | VariationHunter |	Family	| m4.2xlarge	| 0.479	| 1 x 1000 GB	| 0.13	| 8	| 32	| 4 |	8	| 64	| 16	| 1.22| 
 | Wham | Family	| m4.2xlarge	| 0.479	| 1 x 1000 GB |	0.13	| 8	| 32	| 4	| 6	| 48	| 12	| 0.91| 
-| Whamg | 	Family	| m4.2xlarge	| 0.479	| 1 x 1000 GB	| 0.13	| 8	| 32	| 4	| 4	| 32	| 8	| 0.61| 
+| Whamg | 	Family	| m4.2xlarge	| 0.479	| 1 x 1000 GB	| 0.13	| 8	| 32	| 4	| 4	| 32	| 8	| 0.61|
+| SVTyper |	Family	| m4.xlarge |	0.239	| 1 x 1000 GB	| 0.13	| 4 |	16 |	4	| 19	| 76	| 19	| 1.75 |
+
 * Note: QC includes Picard Hybridization Metrics, Picard WGS Metrics, Flagstat, Wham to calculate insert size median and standard deviation, Samtools to extract mitochondria. For mrssnake pipeline please see https://github.com/bnelsj/mrssnake.git
