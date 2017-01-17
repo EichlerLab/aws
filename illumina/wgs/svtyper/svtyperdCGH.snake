@@ -1,0 +1,36 @@
+import os
+
+if config == {}:
+    configfile: "svtyper.json"
+
+DATA_DIR = config["data_dir"]
+SVTYPER = config["svtyper"]
+AWSOUTNAME = config["awsoutname"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+    if file.endswith("final.bam"):
+        SAMPLES.append(str(file).split('.final.bam')[0])
+
+print(SAMPLES)
+
+rule all:
+    input: expand("%s/{sample}.final.bam" % DATA_DIR, sample = SAMPLES), expand("{sample}.dcgh.vcf", sample = SAMPLES), expand("genotyped_vcfs/{sample}.dcgh.geno.vcf", sample = SAMPLES)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule genotype_dcgh:
+    input: "%s/{sample}.final.bam" % DATA_DIR, "{sample}.dcgh.vcf"
+    output: "genotyped_vcfs/{sample}.dcgh.geno.vcf"
+    log: "{sample}.dcgh.geno.log"
+    params: sge_opts="-l mfree=10G -N geno_dcgh -cwd"
+    shell: """
+    START=$(date +%s)
+
+    {SVTYPER} -B {input[0]} -i {input[1]} -o {output}
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+

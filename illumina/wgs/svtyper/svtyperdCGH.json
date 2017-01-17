@@ -1,0 +1,5 @@
+{
+  "data_dir": "/home/ec2-user/family_bam/",
+  "svtyper": "/home/ec2-user/eichlerBinaries/svtyper-0.1.0/svtyper",
+  "awsoutname": "./"
+}
